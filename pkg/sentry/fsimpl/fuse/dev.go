@@ -134,10 +134,22 @@ func (fd *DeviceFD) Read(ctx context.Context, dst usermem.IOSequence, opts vfs.R
 		if !linuxerr.Equals(linuxerr.ErrWouldBlock, err) {
 			return n, err
 		}
-		select {
-		case <-ch:
-		case <-ctx.Done():
-			return 0, linuxerr.EINTR
+		// The wait MUST be task-interruptible (t.Block, not a raw
+		// channel receive): kernel.Pause during checkpointing stops
+		// tasks by interrupting their blocks — a task stuck in a raw
+		// select here never stops and the checkpoint deadlocks (the
+		// FUSE daemons are sandbox tasks). On any interruption, abort
+		// with ERESTARTSYS so the read restarts after resume.
+		if t := blockingTask(ctx); t != nil {
+			if err := t.Block(ch); err != nil {
+				return 0, linuxerr.ERESTARTSYS
+			}
+		} else {
+			select {
+			case <-ch:
+			case <-ctx.Done():
+				return 0, linuxerr.EINTR
+			}
 		}
 	}
 }

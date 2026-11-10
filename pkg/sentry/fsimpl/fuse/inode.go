@@ -25,9 +25,11 @@ import (
 	"gvisor.dev/gvisor/pkg/marshal"
 	"gvisor.dev/gvisor/pkg/marshal/primitive"
 	"gvisor.dev/gvisor/pkg/sentry/fsimpl/kernfs"
+	"gvisor.dev/gvisor/pkg/sentry/fsutil"
 	"gvisor.dev/gvisor/pkg/sentry/kernel"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/auth"
 	"gvisor.dev/gvisor/pkg/sentry/ktime"
+	"gvisor.dev/gvisor/pkg/sentry/memmap"
 	"gvisor.dev/gvisor/pkg/sentry/vfs"
 	"gvisor.dev/gvisor/pkg/sync"
 )
@@ -44,6 +46,7 @@ type fileHandle struct {
 // +stateify savable
 type inode struct {
 	inodeRefs
+	memmap.MappableNoHugepages
 	kernfs.InodeNotAnonymous
 	kernfs.InodeNotSymlink
 	kernfs.InodeWatches
@@ -78,6 +81,18 @@ type inode struct {
 	// fh caches the file handle returned by the server from a FUSE_CREATE request
 	// so we don't have to send a separate FUSE_OPEN request.
 	fh fileHandle
+
+	// mmap support: pages backing memory-mapped contents (sentry-owned,
+	// checkpointable) and the internal file handle used to read them through
+	// the connection. See mmap.go.
+	dataMu sync.Mutex `state:"nosave"`
+	// +checklocks:dataMu
+	data fsutil.FileRangeSet
+	// +checklocks:dataMu
+	mmapFh uint64
+	mapsMu sync.Mutex `state:"nosave"`
+	// +checklocks:mapsMu
+	mappings memmap.MappingSet
 
 	locks   vfs.FileLocks
 	watches vfs.Watches

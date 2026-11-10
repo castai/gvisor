@@ -276,11 +276,23 @@ func (fd *regularFileFD) pwrite(ctx context.Context, src usermem.IOSequence, off
 		inode.size.Store(uint64(offset))
 		inode.fs.conn.attributeVersion.Add(1)
 	}
+	// Writes through this fd bypass any mapped-page cache for the file;
+	// drop those pages so a later remap observes the fresh contents.
+	inode.dropCachedPages(uint64(offset-n), uint64(n))
 	inode.touchCMtime()
 	return n, offset, err
 }
 
 // ConfigureMMap implements vfs.FileDescriptionImpl.ConfigureMMap.
+//
+// Shared writable mappings are refused (erofs' read-only model): writing
+// back mapped pages to the FUSE server on msync is not implemented.
+// Private mappings of any permission and read-only shared mappings are
+// supported, which is what exec (ELF segments) and most workloads use.
 func (fd *regularFileFD) ConfigureMMap(ctx context.Context, opts *memmap.MMapOpts) error {
-	return linuxerr.ENOSYS
+	if opts.MaxPerms.Write && !opts.Private {
+		return linuxerr.EINVAL
+	}
+	opts.SentryOwnedContent = true
+	return vfs.GenericConfigureMMap(&fd.vfsfd, fd.inode(), opts)
 }

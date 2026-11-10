@@ -220,7 +220,12 @@ func (cm *containerManager) StartSubcontainer(args *sentryapi.StartArgs, _ *stru
 			// Translate the `runsc start` to `runsc restore`.
 			// TODO(b/441106898): Move this to the shim once single-shim-per-pod is implemented.
 			log.Warningf("StartSubcontainer called on a restoring sandbox, restoring subcontainer instead: id=%s", args.CID)
-			return cm.RestoreSubcontainer(args, nil)
+			// RestoreSubcontainer writes reply.KernelStarted; a nil reply
+			// panics the sentry. Same class of bug as the shim-side
+			// translation (google/gvisor#13326): every multi-container pod
+			// hits this path for its sibling containers.
+			var reply sentryapi.RestoreReply
+			return cm.RestoreSubcontainer(args, &reply)
 		}
 		return fmt.Errorf("sandbox is not in started state, cannot start subcontainer: state=%s", state)
 	}
@@ -698,7 +703,26 @@ func (cm *containerManager) RestoreSubcontainer(args *sentryapi.StartArgs, reply
 		return fmt.Errorf("error dup'ing gofer files: %w", err)
 	}
 
-	reply.KernelStarted, err = cm.restorer.restoreSubcontainer(args.Spec, args.Conf, cm.l, args.CID, stdios, goferFDs, goferFilestoreFDs, devGoferFD, args.GoferMountConfs)
+	// Re-check the restorer under the loader lock: subcontainer restores
+	// race when a pod has multiple containers (kubelet starts them
+	// concurrently), and the registration of the last one runs the whole
+	// state restore and clears cm.restorer (onRestoreDone) while a sibling
+	// call is still between the state check above and this line. The
+	// sibling's container was restored as part of that completed restore —
+	// report success, not a kernel start.
+	cm.l.mu.Lock()
+	restorer := cm.restorer
+	curState := cm.l.state
+	cm.l.mu.Unlock()
+	if restorer == nil {
+		if curState == restored {
+			reply.KernelStarted = false
+			return nil
+		}
+		return fmt.Errorf("sandbox restore is no longer in progress, cannot restore subcontainer: state=%s", curState)
+	}
+
+	reply.KernelStarted, err = restorer.restoreSubcontainer(args.Spec, args.Conf, cm.l, args.CID, stdios, goferFDs, goferFilestoreFDs, devGoferFD, args.GoferMountConfs)
 	if err != nil {
 		log.Debugf("containerManager.RestoreSubcontainer failed, cid: %s, args: %+v, err: %v", args.CID, args, err)
 		return err

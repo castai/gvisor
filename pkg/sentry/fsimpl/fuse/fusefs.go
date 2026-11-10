@@ -28,6 +28,7 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/kernel"
 	"gvisor.dev/gvisor/pkg/sentry/kernel/auth"
 	"gvisor.dev/gvisor/pkg/sentry/ktime"
+	"gvisor.dev/gvisor/pkg/sentry/pgalloc"
 	"gvisor.dev/gvisor/pkg/sentry/vfs"
 )
 
@@ -98,6 +99,10 @@ type filesystem struct {
 
 	// clock is a real-time clock used to set timestamps in file operations.
 	clock ktime.Clock
+
+	// mf stores pages backing memory-mapped regular files. Like tmpfs,
+	// mapped FUSE file contents are sentry-owned and checkpointable.
+	mf *pgalloc.MemoryFile `state:".(checkpoint.ResourceID)"`
 }
 
 // Name implements vfs.FilesystemType.Name.
@@ -355,11 +360,17 @@ func newFUSEFilesystem(ctx context.Context, vfsObj *vfs.VirtualFilesystem, fsTyp
 		fuseFD.conn = conn
 	}
 
+	mf := pgalloc.MemoryFileFromContext(ctx)
+	if mf == nil {
+		log.Warningf("%s.NewFUSEFilesystem: no MemoryFile from context", fsType.Name())
+		return nil, linuxerr.EINVAL
+	}
 	fs := &filesystem{
 		devMinor: devMinor,
 		opts:     opts,
 		conn:     fuseFD.conn,
 		clock:    ktime.RealtimeClockFromContext(ctx),
+		mf:       mf,
 	}
 	fs.VFSFilesystem().Init(vfsObj, fsType, fs)
 	return fs, nil

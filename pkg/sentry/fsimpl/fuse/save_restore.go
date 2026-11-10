@@ -16,10 +16,13 @@ package fuse
 
 import (
 	goContext "context"
+	"fmt"
 
 	"gvisor.dev/gvisor/pkg/context"
 	"gvisor.dev/gvisor/pkg/errors/linuxerr"
 	"gvisor.dev/gvisor/pkg/log"
+	"gvisor.dev/gvisor/pkg/sentry/checkpoint"
+	"gvisor.dev/gvisor/pkg/sentry/pgalloc"
 	"gvisor.dev/gvisor/pkg/sentry/vfs"
 )
 
@@ -96,4 +99,29 @@ func (fs *filesystem) BeforeResume(ctx context.Context) {}
 // vfs.FilesystemImplSaveRestoreExtension.CompleteRestore.
 func (fs *filesystem) CompleteRestore(ctx context.Context, opts vfs.CompleteRestoreOptions) error {
 	return nil
+}
+
+// saveMf is called by stateify.
+func (fs *filesystem) saveMf() checkpoint.ResourceID {
+	if !fs.mf.IsSavable() {
+		panic(fmt.Sprintf("Can't save FUSE filesystem because its MemoryFile is not savable: %v", fs.mf))
+	}
+	return fs.mf.ResourceID()
+}
+
+// loadMf is called by stateify.
+func (fs *filesystem) loadMf(ctx goContext.Context, resourceID checkpoint.ResourceID) {
+	if !resourceID.Ok() {
+		fs.mf = pgalloc.MemoryFileFromContext(ctx)
+		return
+	}
+	mfmap := pgalloc.MemoryFileMapFromContext(ctx)
+	if mfmap == nil {
+		panic("CtxMemoryFileMap was not provided")
+	}
+	mf, ok := mfmap[resourceID]
+	if !ok {
+		panic(fmt.Sprintf("Memory file for %q not found in CtxMemoryFileMap", resourceID))
+	}
+	fs.mf = mf
 }
