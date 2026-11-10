@@ -569,6 +569,18 @@ func (conn *connection) callFutureLocked(r *Request) (*futureResponse, error) {
 //     it.
 func (conn *connection) waitForResponse(ctx context.Context, r *Request, fut *futureResponse) (*Response, error) {
 	t := blockingTask(ctx)
+	if t != nil && t.TaskGoroutineState() != kernel.TaskGoroutineRunningSys {
+		// We are on the task goroutine, but not in a blockable state:
+		// platform.TryCPUIDEmulate (amd64) reads app memory via mm.CopyIn
+		// while the task goroutine is still in TaskGoroutineRunningApp
+		// (inside systrap Switch), and the FUSE mmap fill faults the code
+		// page in through here. Task.Block is only legal from
+		// TaskGoroutineRunningSys; accountTaskGoroutineEnter panics
+		// otherwise. Wait as this goroutine instead — uninterruptible, but
+		// bounded by the FUSE server's reply (in-sandbox, alive).
+		<-fut.ch
+		return fut.getResponse(), nil
+	}
 	if t == nil {
 		// Not running on a task goroutine, so there are no signals to handle;
 		// treat an interruption like a stop.
