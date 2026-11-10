@@ -115,6 +115,35 @@ func (fd *DeviceFD) PRead(ctx context.Context, dst usermem.IOSequence, offset in
 
 // Read implements vfs.FileDescriptionImpl.Read.
 func (fd *DeviceFD) Read(ctx context.Context, dst usermem.IOSequence, opts vfs.ReadOptions) (int64, error) {
+	n, err := fd.tryRead(ctx, dst)
+	if !linuxerr.Equals(linuxerr.ErrWouldBlock, err) || fd.vfsfd.StatusFlags()&linux.O_NONBLOCK != 0 {
+		return n, err
+	}
+
+	// No request is queued. A blocking fd must wait for one (Linux:
+	// fuse_dev_read waits on the request queue); only an O_NONBLOCK fd
+	// gets EAGAIN right away. Register for readability — the connection
+	// notifies whenever a request is queued — and retry.
+	e, ch := waiter.NewChannelEntry(waiter.ReadableEvents)
+	fd.EventRegister(&e)
+	defer fd.EventUnregister(&e)
+	for {
+		// Re-check after registering: a request may have arrived between
+		// the initial read and the registration.
+		n, err = fd.tryRead(ctx, dst)
+		if !linuxerr.Equals(linuxerr.ErrWouldBlock, err) {
+			return n, err
+		}
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return 0, linuxerr.EINTR
+		}
+	}
+}
+
+// tryRead attempts a single non-blocking read of a queued request.
+func (fd *DeviceFD) tryRead(ctx context.Context, dst usermem.IOSequence) (int64, error) {
 	fd.mu.Lock()
 	defer fd.mu.Unlock()
 	if !fd.connected() {

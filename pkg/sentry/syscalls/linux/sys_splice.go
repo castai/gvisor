@@ -76,16 +76,29 @@ func Splice(t *kernel.Task, sysno uintptr, args arch.SyscallArguments) (uintptr,
 
 	// The operation is non-blocking if anything is non-blocking.
 	//
-	// N.B. This is a rather simplistic heuristic that avoids some
-	// poor edge case behavior since the exact semantics here are
-	// underspecified and vary between versions of Linux itself.
-	nonBlock := ((inFile.StatusFlags()|outFile.StatusFlags())&linux.O_NONBLOCK != 0) || (flags&linux.SPLICE_F_NONBLOCK != 0)
-
 	// At least one file description must represent a pipe.
 	inPipeFD, inIsPipe := inFile.Impl().(*pipe.VFSPipeFD)
 	outPipeFD, outIsPipe := outFile.Impl().(*pipe.VFSPipeFD)
 	if !inIsPipe && !outIsPipe {
 		return 0, nil, linuxerr.EINVAL
+	}
+
+	// The operation is non-blocking if the side we would wait on is
+	// non-blocking, or SPLICE_F_NONBLOCK was passed. For pipe<-file we
+	// wait on the file's readability — Linux's file splice_read blocks on
+	// data unless the file itself is O_NONBLOCK (e.g. the FUSE device,
+	// which libfuse always splices from through an O_NONBLOCK pipe), the
+	// pipe's flag governing only pipe-space contention — and
+	// symmetrically for file<-pipe. Pipe<-pipe keeps the either-side
+	// heuristic below.
+	nonBlock := flags&linux.SPLICE_F_NONBLOCK != 0
+	switch {
+	case inIsPipe && !outIsPipe:
+		nonBlock = nonBlock || outFile.StatusFlags()&linux.O_NONBLOCK != 0
+	case !inIsPipe && outIsPipe:
+		nonBlock = nonBlock || inFile.StatusFlags()&linux.O_NONBLOCK != 0
+	default:
+		nonBlock = nonBlock || (inFile.StatusFlags()|outFile.StatusFlags())&linux.O_NONBLOCK != 0
 	}
 
 	// Copy in offsets.
