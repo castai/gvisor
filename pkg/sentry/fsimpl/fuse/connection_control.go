@@ -42,7 +42,23 @@ const (
 
 	// The FUSE_INIT_IN flags sent to the daemon.
 	// TODO(gvisor.dev/issue/3199): complete the flags.
-	fuseDefaultInitFlags = linux.FUSE_MAX_PAGES | linux.FUSE_ATOMIC_O_TRUNC | linux.FUSE_BIG_WRITES
+	// The advertised set matters for libfuse compatibility, not just for
+	// what the sentry uses internally:
+	//
+	//   - FUSE_SPLICE_{READ,WRITE,MOVE}: libfuse3 (all 3.x, from 3.4 to
+	//     current) hard-aborts the FUSE_INIT handshake when the kernel does
+	//     not offer the splice capabilities ("filesystem requested
+	//     capabilities 0x40 that are not supported by kernel, aborting") —
+	//     in-sandbox FUSE servers never mount. The sentry does not implement
+	//     zero-copy splice on the device, but splice(2) against /dev/fuse
+	//     works through the generic pipe<->non-pipe path (a buffered copy
+	//     through the device's Read/Write), which is functionally correct.
+	//   - FUSE_ASYNC_READ and FUSE_DONT_MASK: the sentry implements both
+	//     connection-side (conn.asyncRead, conn.dontMask); advertising them
+	//     matches fuse.ko and lets daemons that rely on them negotiate.
+	fuseDefaultInitFlags = linux.FUSE_MAX_PAGES | linux.FUSE_ATOMIC_O_TRUNC | linux.FUSE_BIG_WRITES |
+		linux.FUSE_ASYNC_READ | linux.FUSE_DONT_MASK |
+		linux.FUSE_SPLICE_READ | linux.FUSE_SPLICE_WRITE | linux.FUSE_SPLICE_MOVE
 
 	// fuseDatagramUnsafeInitFlags are flags that cannot be offered over a
 	// transport that carries each request in a single datagram: a
