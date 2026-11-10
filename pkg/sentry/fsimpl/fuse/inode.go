@@ -249,6 +249,15 @@ func (i *inode) newEntry(ctx context.Context, name string, fileType linux.FileMo
 	if opcode != linux.FUSE_LOOKUP && (out.Attr.Mode&linux.S_IFMT)^uint32(fileType) != 0 {
 		return nil, linuxerr.EIO
 	}
+	// A LOOKUP reply with node ID 0 is a negative entry: the FUSE server
+	// (fuse-overlayfs does this for every ENOENT, to have the kernel cache
+	// the miss) reports a non-existent name with entry timeouts. Linux's
+	// fuse_lookup() turns it into a negative dentry; returning ENOENT here
+	// matches that. Without this, a zeroed attr reaches newInode and every
+	// lookup of a missing file fails with EIO.
+	if opcode == linux.FUSE_LOOKUP && out.NodeID == 0 {
+		return nil, linuxerr.ENOENT
+	}
 	child, err := i.fs.newInode(ctx, out.FUSEEntryOut)
 	if err != nil {
 		return nil, err
