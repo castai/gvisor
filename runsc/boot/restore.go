@@ -44,6 +44,7 @@ import (
 	"gvisor.dev/gvisor/pkg/sentry/pgalloc"
 	"gvisor.dev/gvisor/pkg/sentry/platform"
 	"gvisor.dev/gvisor/pkg/sentry/socket/hostinet"
+	"gvisor.dev/gvisor/pkg/sentry/socket/netstack"
 	"gvisor.dev/gvisor/pkg/sentry/state"
 	"gvisor.dev/gvisor/pkg/sentry/time"
 	"gvisor.dev/gvisor/pkg/sentry/vfs"
@@ -658,6 +659,17 @@ func (r *restorer) restore(l *Loader) error {
 			if err := l.k.SendExternalSignalThreadGroup(tg, &linux.SignalInfo{Signo: int32(linux.SIGKILL)}); err != nil {
 				log.Warningf("Failed to kill exec process after restore: %v", err)
 			}
+		}
+	}
+
+	// Re-apply stack options that the state file does not carry
+	// (state:"nosave"): the restored network stack otherwise loses the
+	// boot-time --allow-live-tcp-migration setting, and the next checkpoint
+	// of this sandbox would reset every connected TCP endpoint in
+	// (*tcp.Endpoint).beforeSave's removeConf path.
+	if ns := l.k.RootNetworkNamespace(); ns != nil {
+		if netns, ok := ns.Stack().(*netstack.Stack); ok {
+			netns.Stack.SetAllowLiveTCPMigration(l.root.conf.AllowLiveTCPMigration)
 		}
 	}
 
