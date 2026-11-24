@@ -268,6 +268,7 @@ func (l *lineDiscipline) StateFields() []string {
 		"termios",
 		"column",
 		"numReplicas",
+		"replicaOpened",
 		"masterWaiter",
 		"replicaWaiter",
 		"terminal",
@@ -287,11 +288,12 @@ func (l *lineDiscipline) StateSave(stateSinkObject state.Sink) {
 	stateSinkObject.Save(3, &l.termios)
 	stateSinkObject.SaveInt(4, &l.column)
 	stateSinkObject.SaveInt(5, &l.numReplicas)
-	stateSinkObject.Save(6, &l.masterWaiter)
-	stateSinkObject.Save(7, &l.replicaWaiter)
-	stateSinkObject.Save(8, &l.terminal)
-	stateSinkObject.SaveBool(9, &l.packet)
-	stateSinkObject.SaveUint8(10, &l.packetStatus)
+	stateSinkObject.SaveBool(6, &l.replicaOpened)
+	stateSinkObject.Save(7, &l.masterWaiter)
+	stateSinkObject.Save(8, &l.replicaWaiter)
+	stateSinkObject.Save(9, &l.terminal)
+	stateSinkObject.SaveBool(10, &l.packet)
+	stateSinkObject.SaveUint8(11, &l.packetStatus)
 }
 
 func (l *lineDiscipline) afterLoad(context.Context) {}
@@ -304,11 +306,12 @@ func (l *lineDiscipline) StateLoad(ctx context.Context, stateSourceObject state.
 	stateSourceObject.Load(3, &l.termios)
 	stateSourceObject.LoadInt(4, &l.column)
 	stateSourceObject.LoadInt(5, &l.numReplicas)
-	stateSourceObject.Load(6, &l.masterWaiter)
-	stateSourceObject.Load(7, &l.replicaWaiter)
-	stateSourceObject.Load(8, &l.terminal)
-	stateSourceObject.LoadBool(9, &l.packet)
-	stateSourceObject.LoadUint8(10, &l.packetStatus)
+	stateSourceObject.LoadBool(6, &l.replicaOpened)
+	stateSourceObject.Load(7, &l.masterWaiter)
+	stateSourceObject.Load(8, &l.replicaWaiter)
+	stateSourceObject.Load(9, &l.terminal)
+	stateSourceObject.LoadBool(10, &l.packet)
+	stateSourceObject.LoadUint8(11, &l.packetStatus)
 }
 
 func (o *outputQueueTransformer) StateTypeName() string {
