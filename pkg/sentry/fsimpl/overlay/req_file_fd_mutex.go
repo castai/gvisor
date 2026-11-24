@@ -58,6 +58,18 @@ func (m *regularFileFDMutex) NestedUnlock(i regularFileFDlockNameIndex) {
 	m.mu.Unlock()
 }
 
+// LockBypass locks m without executing the validator.
+// +checklocksignore
+func (m *regularFileFDMutex) LockBypass() {
+	m.mu.Lock()
+}
+
+// UnlockBypass undoes a single LockBypass call.
+// +checklocksignore
+func (m *regularFileFDMutex) UnlockBypass() {
+	m.mu.Unlock()
+}
+
 // DO NOT REMOVE: The following function is automatically replaced.
 func regularFileFDinitLockNames() { regularFileFDlockNames = []string{"d1", "d2"} }
 

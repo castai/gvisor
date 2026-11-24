@@ -55,6 +55,18 @@ func (m *virtualFilesystemMutex) NestedUnlock(i virtualFilesystemlockNameIndex) 
 	m.mu.Unlock()
 }
 
+// LockBypass locks m without executing the validator.
+// +checklocksignore
+func (m *virtualFilesystemMutex) LockBypass() {
+	m.mu.Lock()
+}
+
+// UnlockBypass undoes a single LockBypass call.
+// +checklocksignore
+func (m *virtualFilesystemMutex) UnlockBypass() {
+	m.mu.Unlock()
+}
+
 // DO NOT REMOVE: The following function is automatically replaced.
 func virtualFilesysteminitLockNames() {}
 

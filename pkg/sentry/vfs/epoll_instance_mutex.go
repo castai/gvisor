@@ -55,6 +55,18 @@ func (m *epollReadyInstanceMutex) NestedUnlock(i epollReadyInstancelockNameIndex
 	m.mu.Unlock()
 }
 
+// LockBypass locks m without executing the validator.
+// +checklocksignore
+func (m *epollReadyInstanceMutex) LockBypass() {
+	m.mu.Lock()
+}
+
+// UnlockBypass undoes a single LockBypass call.
+// +checklocksignore
+func (m *epollReadyInstanceMutex) UnlockBypass() {
+	m.mu.Unlock()
+}
+
 // DO NOT REMOVE: The following function is automatically replaced.
 func epollReadyInstanceinitLockNames() {}
 

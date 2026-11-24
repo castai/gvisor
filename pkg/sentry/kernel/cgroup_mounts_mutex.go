@@ -55,6 +55,18 @@ func (m *cgroupMountsMutex) NestedUnlock(i cgroupMountslockNameIndex) {
 	m.mu.Unlock()
 }
 
+// LockBypass locks m without executing the validator.
+// +checklocksignore
+func (m *cgroupMountsMutex) LockBypass() {
+	m.mu.Lock()
+}
+
+// UnlockBypass undoes a single LockBypass call.
+// +checklocksignore
+func (m *cgroupMountsMutex) UnlockBypass() {
+	m.mu.Unlock()
+}
+
 // DO NOT REMOVE: The following function is automatically replaced.
 func cgroupMountsinitLockNames() {}
 

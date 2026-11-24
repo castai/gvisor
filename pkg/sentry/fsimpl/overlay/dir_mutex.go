@@ -64,6 +64,18 @@ func (m *dirMutex) NestedUnlock(i dirlockNameIndex) {
 	m.mu.Unlock()
 }
 
+// LockBypass locks m without executing the validator.
+// +checklocksignore
+func (m *dirMutex) LockBypass() {
+	m.mu.Lock()
+}
+
+// UnlockBypass undoes a single LockBypass call.
+// +checklocksignore
+func (m *dirMutex) UnlockBypass() {
+	m.mu.Unlock()
+}
+
 // DO NOT REMOVE: The following function is automatically replaced.
 func dirinitLockNames() {
 	dirlockNames = []string{"d1", "d1new", "d1replaced", "d1child", "d2", "d2new", "d2replaced", "d2child"}

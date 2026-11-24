@@ -57,6 +57,18 @@ func (m *netstackLinkMutex) NestedUnlock(i netstackLinklockNameIndex) {
 	m.mu.Unlock()
 }
 
+// LockBypass locks m without executing the validator.
+// +checklocksignore
+func (m *netstackLinkMutex) LockBypass() {
+	m.mu.Lock()
+}
+
+// UnlockBypass undoes a single LockBypass call.
+// +checklocksignore
+func (m *netstackLinkMutex) UnlockBypass() {
+	m.mu.Unlock()
+}
+
 // DO NOT REMOVE: The following function is automatically replaced.
 func netstackLinkinitLockNames() { netstackLinklockNames = []string{"destStack"} }
 

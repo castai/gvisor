@@ -57,6 +57,18 @@ func (m *userNamespaceMutex) NestedUnlock(i userNamespacelockNameIndex) {
 	m.mu.Unlock()
 }
 
+// LockBypass locks m without executing the validator.
+// +checklocksignore
+func (m *userNamespaceMutex) LockBypass() {
+	m.mu.Lock()
+}
+
+// UnlockBypass undoes a single LockBypass call.
+// +checklocksignore
+func (m *userNamespaceMutex) UnlockBypass() {
+	m.mu.Unlock()
+}
+
 // DO NOT REMOVE: The following function is automatically replaced.
 func userNamespaceinitLockNames() { userNamespacelockNames = []string{"ns"} }
 

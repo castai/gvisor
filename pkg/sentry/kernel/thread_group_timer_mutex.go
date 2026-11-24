@@ -55,6 +55,18 @@ func (m *threadGroupTimerMutex) NestedUnlock(i threadGroupTimerlockNameIndex) {
 	m.mu.Unlock()
 }
 
+// LockBypass locks m without executing the validator.
+// +checklocksignore
+func (m *threadGroupTimerMutex) LockBypass() {
+	m.mu.Lock()
+}
+
+// UnlockBypass undoes a single LockBypass call.
+// +checklocksignore
+func (m *threadGroupTimerMutex) UnlockBypass() {
+	m.mu.Unlock()
+}
+
 // DO NOT REMOVE: The following function is automatically replaced.
 func threadGroupTimerinitLockNames() {}
 
